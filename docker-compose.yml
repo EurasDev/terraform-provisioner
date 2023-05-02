@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  terraform:
+    image: jackamatic/terraform-python:1.0.0
+    working_dir: /workspace
+    entrypoint: ["/bin/sh"]
+    command: ["-c", "python3 /provisioner/TerraformProvisioner.py -d \"/workspace\" ${FLAGS}"]
+    environment:
+      - FLAGS
+    volumes:
+      - ${PROJECT_DIR}:/workspace
+      - ~/.aws/credentials:/root/.aws/credentials:ro
+    stdin_open: true
+    tty: true
