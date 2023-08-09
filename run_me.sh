@@ -10,4 +10,6 @@ done
 
 export FLAGS
 
+#docker system prune -a # only do this for testing to ensure clean build everytime
 docker compose run --rm terraform
+#docker compose build

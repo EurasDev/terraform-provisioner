@@ -10,64 +10,60 @@ class TerraformProvisioner:
         if aws_profile:
             os.environ["AWS_PROFILE"] = aws_profile
 
-
     def _run_terraform_command(self, command):
-        previous_cwd = os.getcwd()
-        os.chdir(self.working_dir)
         try:
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
-            print(result.stdout)
-            return result.stdout
+            result = subprocess.run(command, check=True)
+            return True
         except subprocess.CalledProcessError as e:
             print(f"Error executing Terraform command: {e}")
-            print(e.stderr)
             return None
-        finally:
-            os.chdir(previous_cwd)
-
 
     def init(self):
         command = ["terraform", "init"]
+        print(f"Terraform initialised")
         return self._run_terraform_command(command)
 
 
     def workspace(self, workspace_name=None):
         if workspace_name:
             command = ["terraform", "workspace", "select", workspace_name]
+            print(f"Workspace selected: {workspace_name}")
             return self._run_terraform_command(command)
-
 
     def plan(self, var_files=None, plan_file=None):
         command = ["terraform", "plan"]
 
         if var_files:
             for var_file in var_files:
+                var_file = f"{var_file}.tfvars"
                 command.extend(["-var-file", var_file])
+                print(f"Var file defined: {var_file}")
+        else:
+            print(f"No var file defined, continuing...")
 
         if plan_file:
             command.extend(["-out", plan_file])
 
-        plan_output = self._run_terraform_command(command)
-        if plan_output:
-            return plan_output
-        else:
-            print("Error during planning.")
-
+        plan_success = self._run_terraform_command(command)
+        return plan_success
 
     def apply(self, var_files=None, workspace_name=None):
         self.init()
         self.workspace(workspace_name)
-        
-        with tempfile.NamedTemporaryFile() as plan_file:
-            plan_output = self.plan(var_files, plan_file.name)
-            if plan_output:
-                print(f"Active workspace: {workspace_name}")
-                input("Press Enter to apply changes or CTRL+C to interrupt!")
-                command = ["terraform", "apply", "-auto-approve", plan_file.name]
-                return self._run_terraform_command(command)
-            else:
-                print("Error during planning. Skipping apply step.")
 
+        plan_success = self.plan(var_files)
+            
+        if plan_success:
+            print(f"Active workspace: {workspace_name}")
+            input("Press Enter to apply changes or CTRL+C to interrupt!")
+            command = ["terraform", "apply"]
+            if var_files:
+                for var_file in var_files:
+                    var_file = f"{var_file}.tfvars"
+                    command.extend(["-var-file", var_file])
+            return self._run_terraform_command(command)
+        else:
+            print("Error during planning. Skipping apply step.")
 
     def destroy(self, var_files=None, workspace_name=None):
         self.init()
@@ -77,18 +73,23 @@ class TerraformProvisioner:
         command = ["terraform", "plan", "-destroy"]
         if var_files:
             for var_file in var_files:
+                var_file = f"{var_file}.tfvars"
                 command.extend(["-var-file", var_file])
         plan_output = self._run_terraform_command(command)
-        if plan_output:
-            print(f"Active workspace: {workspace_name}")
-            input("Press Enter to destroy resources or CTRL+C to interrupt!")
-            command = ["terraform", "destroy", "-auto-approve"]
-            if var_files:
-                for var_file in var_files:
-                    command.extend(["-var-file", var_file])
-            return self._run_terraform_command(command)
-        else:
+
+        if not plan_output:
             print("Error during destroy planning. Skipping destroy step.")
+            return
+
+        print(f"Active workspace: {workspace_name}")
+        input("Press Enter to continue with the destroy or CTRL+C to interrupt!")
+        
+        command = ["terraform", "destroy"]
+        if var_files:
+            for var_file in var_files:
+                var_file = f"{var_file}.tfvars"
+                command.extend(["-var-file", var_file])
+        return self._run_terraform_command(command)
 
     def validate(self):
         command = ["terraform", "validate"]
@@ -105,7 +106,6 @@ def main():
     parser.add_argument('--validate', action='store_true', help='Run terraform validate only')
 
     args = parser.parse_args()
-
     tf_provisioner = TerraformProvisioner(args.directory, aws_profile=args.profile)
 
     try:

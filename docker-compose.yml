@@ -2,6 +2,7 @@ version: "3.8"
 #
 services:
   terraform:
+    #build : .
     image: jackamatic/terraform-python:1.0.0
     working_dir: /workspace
     entrypoint: ["/bin/sh"]
